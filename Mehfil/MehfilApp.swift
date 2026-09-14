@@ -66,8 +66,7 @@ struct SplashView: View {
         ZStack {
             MColor.ground.ignoresSafeArea()
             VStack(spacing: Space.md) {
-                Text("M").type(.displayHero).foregroundStyle(MColor.emphasisText)
-                    .frame(width: 72, height: 72).background(MColor.emphasisBg, in: RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
+                Image("BrandMark").resizable().frame(width: 72, height: 72).clipShape(RoundedRectangle(cornerRadius: Radius.xl, style: .continuous))
                 ProgressView().tint(MColor.textMute)
             }
         }

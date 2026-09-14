@@ -13,8 +13,7 @@ struct WelcomeView: View {
             MColor.ground.ignoresSafeArea()
             VStack(alignment: .leading, spacing: Space.xl) {
                 Spacer()
-                Text("M").type(.displayHero).foregroundStyle(MColor.emphasisText)
-                    .frame(width: 64, height: 64).background(MColor.emphasisBg, in: RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
+                Image("BrandMark").resizable().frame(width: 64, height: 64).clipShape(RoundedRectangle(cornerRadius: Radius.lg, style: .continuous))
                 VStack(alignment: .leading, spacing: Space.sm) {
                     Text("Mehfil").type(.displayHero).foregroundStyle(MColor.text)
                     Text("Run the wedding season without the spreadsheet.").type(.headingMd).foregroundStyle(MColor.text)
