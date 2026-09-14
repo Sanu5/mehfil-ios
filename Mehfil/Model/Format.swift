@@ -1,0 +1,93 @@
+import Foundation
+
+// MARK: - Calendar helpers. The content model is anchored to Thu 12 Nov 2026 (NOTES "Content model").
+
+enum Cal {
+    static let calendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.firstWeekday = 1 // Sunday-first grid, as in the design (S M T W T F S)
+        return c
+    }()
+
+    /// The vendor's "today". Fixed so the season, conflicts and receivables read exactly as designed.
+    static let today: Date = date(2026, 11, 12, 9, 41)
+
+    static func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 0, _ min: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: y, month: m, day: d, hour: h, minute: min))!
+    }
+    static func sameDay(_ a: Date, _ b: Date) -> Bool { calendar.isDate(a, inSameDayAs: b) }
+    static func startOfDay(_ d: Date) -> Date { calendar.startOfDay(for: d) }
+    static func adding(_ n: Int, _ unit: Calendar.Component, to d: Date) -> Date { calendar.date(byAdding: unit, value: n, to: d)! }
+    static func daysBetween(_ a: Date, _ b: Date) -> Int {
+        calendar.dateComponents([.day], from: startOfDay(a), to: startOfDay(b)).day ?? 0
+    }
+    static func day(_ d: Date) -> Int { calendar.component(.day, from: d) }
+    static func month(_ d: Date) -> Int { calendar.component(.month, from: d) }
+    static func year(_ d: Date) -> Int { calendar.component(.year, from: d) }
+    static func hour(_ d: Date) -> Double {
+        let c = calendar.dateComponents([.hour, .minute], from: d)
+        return Double(c.hour ?? 0) + Double(c.minute ?? 0) / 60
+    }
+    /// Monday-to-Sunday week containing `today` (NOTES Phase 4: "this week" is Mon–Sun).
+    static var thisWeek: ClosedRange<Date> {
+        let wd = calendar.component(.weekday, from: today) // 1 = Sun
+        let offsetToMonday = (wd + 5) % 7
+        let monday = startOfDay(adding(-offsetToMonday, .day, to: today))
+        let sundayEnd = adding(7, .day, to: monday)
+        return monday...sundayEnd
+    }
+}
+
+// MARK: - Formatting
+
+enum Fmt {
+    /// Indian digit grouping: ₹23,47,500 — never ₹2,347,500 (spec §6).
+    static func inr(_ amount: Int, symbol: Bool = true) -> String {
+        let negative = amount < 0
+        let s = String(abs(amount))
+        var grouped = ""
+        if s.count > 3 {
+            let last3 = s.suffix(3)
+            var rest = String(s.dropLast(3))
+            var parts: [String] = []
+            while rest.count > 2 { parts.insert(String(rest.suffix(2)), at: 0); rest = String(rest.dropLast(2)) }
+            if !rest.isEmpty { parts.insert(rest, at: 0) }
+            grouped = parts.joined(separator: ",") + "," + last3
+        } else { grouped = s }
+        return (negative ? "−" : "") + (symbol ? "₹" : "") + grouped
+    }
+
+    /// Lakh notation for narrow columns only (NOTES number-formatting rule): ₹22.1L
+    static func lakh(_ amount: Int) -> String {
+        let l = Double(amount) / 100_000
+        return "₹" + (l == l.rounded() ? String(Int(l)) : String(format: "%.1f", l)) + "L"
+    }
+
+    private static func f(_ format: String) -> DateFormatter {
+        let df = DateFormatter(); df.calendar = Cal.calendar; df.locale = Locale(identifier: "en_IN"); df.dateFormat = format; return df
+    }
+    static let time = f("HH:mm")
+    static let dayMonth = f("d MMM")            // 14 Nov
+    static let dayMonthLong = f("d MMMM")       // 14 November
+    static let weekdayDayMonth = f("EEE d MMM") // Sat 14 Nov
+    static let weekdayLong = f("EEEE d MMMM")   // Saturday 14 November
+    static let weekdayLongYear = f("EEEE d MMMM yyyy")
+    static let monthYear = f("MMMM yyyy")
+    static let monthShort = f("MMM")
+    static let weekdayShort = f("EEE")
+    static let dayNum = f("d")
+    static let weekdayDayMonthTime = f("EEE d MMM, HH:mm")
+
+    static func timeRange(_ a: Date, _ b: Date) -> String { "\(time.string(from: a))–\(time.string(from: b))" }
+
+    static func relativeDays(_ d: Date, from today: Date = Cal.today) -> String {
+        let n = Cal.daysBetween(today, d)
+        switch n {
+        case 0: return "today"
+        case 1: return "tomorrow"
+        case ..<0: return "\(-n) days late"
+        default: return "in \(n) days"
+        }
+    }
+    static func daysLate(_ d: Date) -> Int { max(0, Cal.daysBetween(d, Cal.today)) }
+}
