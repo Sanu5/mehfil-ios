@@ -31,7 +31,8 @@ struct WelcomeView: View {
                         SignInWithAppleButton(.continue) { _ in } onCompletion: { _ in }
                             .signInWithAppleButtonStyle(scheme == .dark ? .white : .black)
                             .frame(height: Dim.button).clipShape(Capsule()).allowsHitTesting(false)
-                            .overlay(Button { run { try await auth.signInWithApple() } } label: { Color.clear }.buttonStyle(.plain))
+                            // Color.clear is not hit-testable on its own; the contentShape makes the whole capsule tappable.
+                            .overlay(Button { run { try await auth.signInWithApple() } } label: { Color.clear.contentShape(Capsule()) }.buttonStyle(.plain))
                         Button { run { try await auth.signInWithGoogle() } } label: {
                             HStack(spacing: Space.sm) {
                                 GoogleMark().frame(width: 18, height: 18)
@@ -71,18 +72,9 @@ struct WelcomeView: View {
     }
 }
 
-/// The four-colour G, drawn so no asset is needed.
+/// Google's four-colour G — the official geometry, as a vector asset.
 struct GoogleMark: View {
-    var body: some View {
-        ZStack {
-            Circle().trim(from: 0.05, to: 0.30).stroke(Color(red: 0.98, green: 0.74, blue: 0.02), lineWidth: 4)
-            Circle().trim(from: 0.30, to: 0.55).stroke(Color(red: 0.20, green: 0.66, blue: 0.33), lineWidth: 4)
-            Circle().trim(from: 0.55, to: 0.80).stroke(Color(red: 0.26, green: 0.52, blue: 0.96), lineWidth: 4)
-            Circle().trim(from: 0.80, to: 0.95).stroke(Color(red: 0.92, green: 0.26, blue: 0.21), lineWidth: 4)
-            Rectangle().fill(Color(red: 0.26, green: 0.52, blue: 0.96)).frame(width: 8, height: 4).offset(x: 4)
-        }
-        .rotationEffect(.degrees(-90))
-    }
+    var body: some View { Image("GoogleG").resizable().scaledToFit() }
 }
 
 /// Onboarding — the business card the rest of the app is signed with.

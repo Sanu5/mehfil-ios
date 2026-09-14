@@ -16,10 +16,11 @@ struct Account: Equatable {
 }
 
 enum AuthError: LocalizedError {
-    case cancelled, noToken, noPresenter, notConfigured
+    case cancelled, noToken, noPresenter, notConfigured, appleUnavailable
     var errorDescription: String? {
         switch self {
         case .cancelled: "Sign-in was cancelled."
+        case .appleUnavailable: "Sign in with Apple isn't available here. Sign in to an Apple Account in Settings first, then try again."
         case .noToken: "The sign-in provider did not return a token."
         case .noPresenter: "Nothing to present the sign-in from."
         case .notConfigured: "Cloud sign-in is not configured in this build."
@@ -184,8 +185,14 @@ final class AppleSignInCoordinator: NSObject, ASAuthorizationControllerDelegate,
         continuation?.resume(returning: (credential, code)); continuation = nil
     }
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        if let e = error as? ASAuthorizationError, e.code == .canceled { continuation?.resume(throwing: AuthError.cancelled) }
-        else { continuation?.resume(throwing: error) }
+        if let e = error as? ASAuthorizationError {
+            switch e.code {
+            case .canceled: continuation?.resume(throwing: AuthError.cancelled)
+            // 1000: no Apple Account on this device/simulator, or the app was built without the Sign in with Apple entitlement.
+            case .unknown: continuation?.resume(throwing: AuthError.appleUnavailable)
+            default: continuation?.resume(throwing: error)
+            }
+        } else { continuation?.resume(throwing: error) }
         continuation = nil
     }
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
