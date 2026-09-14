@@ -48,7 +48,7 @@ struct WelcomeView: View {
                             .type(.caption).foregroundStyle(MColor.textMute).multilineTextAlignment(.center)
                     }
                     if let error { Text(error).type(.caption).foregroundStyle(MColor.danger).multilineTextAlignment(.center) }
-                    Text("By continuing you agree to the [Terms](https://github.com/Sanu5/mehfil-ios/blob/main/TERMS.md) and [Privacy Policy](https://github.com/Sanu5/mehfil-ios/blob/main/PRIVACY.md).")
+                    Text("By continuing you agree to the [Terms](https://sanu5.github.io/terms/) and [Privacy Policy](https://sanu5.github.io/privacy/).")
                         .type(.caption).foregroundStyle(MColor.textMute).tint(MColor.accentText).multilineTextAlignment(.center).padding(.top, Space.xs)
                 }
             }
@@ -159,8 +159,8 @@ struct AccountView: View {
             Text("Deleting removes your account and every event, client, crew member and payment record. It cannot be undone.")
                 .type(.caption).foregroundStyle(MColor.textMute)
             HStack(spacing: Space.lg) {
-                Link("Privacy Policy", destination: URL(string: "https://github.com/Sanu5/mehfil-ios/blob/main/PRIVACY.md")!)
-                Link("Terms", destination: URL(string: "https://github.com/Sanu5/mehfil-ios/blob/main/TERMS.md")!)
+                Link("Privacy Policy", destination: URL(string: "https://sanu5.github.io/privacy/")!)
+                Link("Terms", destination: URL(string: "https://sanu5.github.io/terms/")!)
             }
             .type(.caption).tint(MColor.accentText)
         }
