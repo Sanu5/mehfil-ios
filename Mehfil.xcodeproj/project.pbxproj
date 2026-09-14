@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		AA2000312BCD00310000B031 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = AA2000112BCD00110000B011 /* FirebaseAuth */; };
+		AA2000322BCD00320000B032 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = AA2000122BCD00120000B012 /* FirebaseFirestore */; };
+		AA2000332BCD00330000B033 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = AA2000132BCD00130000B013 /* GoogleSignIn */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		AA1000052BCD00050000A005 /* Mehfil.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mehfil.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -36,6 +42,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA2000312BCD00310000B031 /* FirebaseAuth in Frameworks */,
+				AA2000322BCD00320000B032 /* FirebaseFirestore in Frameworks */,
+				AA2000332BCD00330000B033 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -68,6 +77,7 @@
 				AA1000082BCD00080000A008 /* Sources */,
 				AA1000022BCD00020000A002 /* Frameworks */,
 				AA1000092BCD00090000A009 /* Resources */,
+				AA2000202BCD00200000B020 /* Google Sign-In URL scheme */,
 			);
 			buildRules = (
 			);
@@ -78,6 +88,9 @@
 			);
 			name = Mehfil;
 			packageProductDependencies = (
+				AA2000112BCD00110000B011 /* FirebaseAuth */,
+				AA2000122BCD00120000B012 /* FirebaseFirestore */,
+				AA2000132BCD00130000B013 /* GoogleSignIn */,
 			);
 			productName = Mehfil;
 			productReference = AA1000052BCD00050000A005 /* Mehfil.app */;
@@ -109,6 +122,10 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AA1000042BCD00040000A004 /* Products */;
+			packageReferences = (
+				AA2000012BCD00010000B001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				AA2000022BCD00020000B002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -126,6 +143,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		AA2000202BCD00200000B020 /* Google Sign-In URL scheme */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Google Sign-In URL scheme";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Registers the REVERSED_CLIENT_ID from GoogleService-Info.plist as a URL scheme so Google Sign-In can return to the app.\nPLIST=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nGS=\"${SRCROOT}/Mehfil/GoogleService-Info.plist\"\nif [ -f \"$GS\" ] && [ -f \"$PLIST\" ]; then\n  RID=$(/usr/libexec/PlistBuddy -c \"Print :REVERSED_CLIENT_ID\" \"$GS\" 2>/dev/null)\n  if [ -n \"$RID\" ]; then\n    /usr/libexec/PlistBuddy -c \"Set :CFBundleURLTypes:0:CFBundleURLSchemes:0 $RID\" \"$PLIST\" 2>/dev/null || /usr/libexec/PlistBuddy -c \"Add :CFBundleURLTypes array\" -c \"Add :CFBundleURLTypes:0 dict\" -c \"Add :CFBundleURLTypes:0:CFBundleURLSchemes array\" -c \"Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string $RID\" \"$PLIST\"\n    echo \"Registered Google Sign-In URL scheme\"\n  fi\nelse\n  echo \"No GoogleService-Info.plist — building without cloud sign-in\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		AA1000082BCD00080000A008 /* Sources */ = {
@@ -168,7 +207,7 @@
 				DEVELOPMENT_TEAM = 92YDDZ83KP;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -225,7 +264,7 @@
 				DEVELOPMENT_TEAM = 92YDDZ83KP;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -250,6 +289,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Mehfil/Mehfil.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -278,6 +318,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Mehfil/Mehfil.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
@@ -302,6 +343,43 @@
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		AA2000012BCD00010000B001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.19.1;
+			};
+		};
+		AA2000022BCD00020000B002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA2000112BCD00110000B011 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA2000012BCD00010000B001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		AA2000122BCD00120000B012 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA2000012BCD00010000B001 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		AA2000132BCD00130000B013 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA2000022BCD00020000B002 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCConfigurationList section */
 		AA1000072BCD00070000A007 /* Build configuration list for PBXNativeTarget "Mehfil" */ = {

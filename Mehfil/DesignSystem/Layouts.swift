@@ -177,10 +177,9 @@ struct EventCard: View {
     var event: Event
     var client: Client?
     var paymentState: PaymentState
+    var conflicted = false
     var compact = false
     var action: () -> Void
-
-    var conflicted: Bool { event.hasCrewConflict }
 
     var body: some View {
         Button(action: action) {
@@ -251,7 +250,7 @@ struct PaymentRow: View {
                 Spacer(minLength: Space.sm)
                 VStack(alignment: .trailing, spacing: Space.xs) {
                     Money(milestone.amount)
-                    StatusChip(kind: ChipKind.from(milestone.status))
+                    StatusChip(kind: ChipKind.from(milestone.effectiveStatus))
                 }
                 if let trailingAction {
                     IconButton(symbol: trailingSymbol, action: trailingAction).padding(.trailing, -Space.sm)

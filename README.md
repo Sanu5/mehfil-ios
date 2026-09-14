@@ -3,7 +3,7 @@
 Operations app for Indian wedding-service vendors — decorators, caterers, photographers, light-and-sound crews. The calendar is the spine, outstanding money is always one tap away, and double-bookings surface before they become a problem.
 
 Built in **SwiftUI for iOS 26 with Liquid Glass**, from the Figma design
-[Mehfil](https://www.figma.com/design/HiKVpYsO9qLnUAWF1iZrUY/Untitled?node-id=3-2): 24 screens, 18 components, light and dark. The Android app lives in the sibling repo `mehfil-android`.
+[Mehfil](https://www.figma.com/design/HiKVpYsO9qLnUAWF1iZrUY/Untitled?node-id=3-2): 24 screens, 18 components, light and dark. Accounts and data live in **Firebase** (Sign in with Apple, Google, Cloud Firestore) — the rules and data model are in the sibling repo `mehfil-backend`; the Android app is `mehfil-android`.
 
 <p>
   <img src="docs/screenshots/home.png" width="180" alt="Home">
@@ -20,9 +20,10 @@ Built in **SwiftUI for iOS 26 with Liquid Glass**, from the Figma design
 | **B · Events** | Segmented list grouped by month · Event hub with summary tiles, collapsible Payments, Crew, Inventory and Runsheet · Two-step create with an inline conflict check the moment a date is picked · Runsheet with completion toggles and reorder · Change request that shows consequences (chairs, tables, helpers, transport) and the revised quote |
 | **C · Money** | Receivables grouped Overdue → Due this week → Upcoming · Per-event payment schedule with collection progress · Record payment on a large numeric keypad (never the alphanumeric keyboard) · Reminders with real composed copy in three tones and the history of what was sent before · Expenses with the margin and a loss state |
 | **D · Team & inventory** | Crew by role with availability for a chosen date · Assign crew where booked members stay tappable and open a comparison of both events · Attendance with a single-tap three-state control · Inventory with commitment bars and over-committed items first · Item detail with a 30-day commitment strip |
-| **E · Clients & system** | Client list with lifetime value and repeat markers · The client-facing shared event page (cream, gradient mesh, always light) · Enquiry intake with the same conflict check · Profile with appearance and settings |
+| **E · Clients & system** | Client list with lifetime value and repeat markers · The client-facing shared event page (cream, gradient mesh, always light, ShareLink) · Enquiry intake that saves, edits, closes and converts to an event · Package templates · Profile with business details, payment details, notifications, appearance · Account with sample data, erase, sign out and account deletion |
+| **Sign-in & data** | Welcome with Sign in with Apple and Google · One-screen business onboarding with an optional sample season · Every record (events, clients, milestones, crew, attendance, inventory, runsheet, reminders, expenses, enquiries, packages, change requests) is a Firestore document under `vendors/{uid}`, cached offline and streamed live |
 
-Every amount uses Indian digit grouping (`₹23,47,500`), every string is real content, and every screen that modifies data shows a save state. The event draft survives leaving the create flow.
+Every amount uses Indian digit grouping (`₹23,47,500`), every screen that modifies data writes through the store and shows a save state, and the event draft survives leaving the create flow. Overdue milestones, crew conflicts, payment states and season totals are **derived on the device from stored data**, never stored, so they can't go stale.
 
 ## Liquid Glass
 
@@ -41,32 +42,50 @@ Every amount uses Indian digit grouping (`₹23,47,500`), every string is real c
 
 ## Run it
 
-Requires Xcode 26 (iOS 26 SDK). Open `Mehfil.xcodeproj`, pick the **Mehfil** scheme and an iPhone simulator, and run. From the terminal:
+Requires Xcode 26 (iOS 26 SDK). Open `Mehfil.xcodeproj`, pick the **Mehfil** scheme and an iPhone simulator, and run. Swift packages (`firebase-ios-sdk`, `GoogleSignIn-iOS`) resolve on first open. From the terminal:
 
 ```bash
 xcodebuild -project Mehfil.xcodeproj -scheme Mehfil -configuration Debug \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' CODE_SIGNING_ALLOWED=NO build
 ```
 
-No backend, no packages: the app runs on an in-memory content model and stores only the appearance setting and the event draft in `UserDefaults`.
+**Without a Firebase config** the app runs in *device-only* mode: the welcome screen offers **Continue on this device**, data is stored as JSON in Application Support, and the whole product can be used and reviewed. Nothing else changes.
+
+**With Firebase** — drop `GoogleService-Info.plist` (git-ignored) into `Mehfil/`. The build script registers the Google URL scheme from it, `FirebaseApp.configure()` runs, and the welcome screen shows Sign in with Apple and Google. Setup steps, Firestore rules and the data model are in [`mehfil-backend`](https://github.com/Sanu5/mehfil-backend).
+
+## Ship it
+
+- Bundle id `com.anish.mehfil`, iOS 26.0+, version in `MARKETING_VERSION` / `CURRENT_PROJECT_VERSION`.
+- Signing & Capabilities → your team. **Sign in with Apple** is in `Mehfil.entitlements`; Xcode registers it on the App ID.
+- `PrivacyInfo.xcprivacy` declares the collected data (email, name, user content — linked, not tracked) and the required-reason APIs; answer App Privacy the same way.
+- Account deletion (guideline 5.1.1(v)) is in Profile → Account → Delete account: re-authenticates, revokes the Apple token, deletes every document, then the Firebase user.
+- Privacy policy and terms: [`PRIVACY.md`](PRIVACY.md), [`TERMS.md`](TERMS.md) — link them in App Store Connect.
+- Archive with **Product → Archive** and upload through Xcode Organizer.
 
 ## Layout
 
 ```
 Mehfil/
-  MehfilApp.swift            entry, appearance
+  MehfilApp.swift            Firebase configure, session routing (welcome → onboarding → app)
   Navigation/RootView.swift  TabView + per-tab NavigationStack, routes, toast overlay
-  Model/                     Models · SeedData (content model) · AppStore (@Observable) · Format (₹ grouping, dates)
-  DesignSystem/              Tokens (light/dark palette, spacing, radii) · Typography (Inter type roles)
-                             Components (buttons, chips, inputs, keypad, rows, banners, stepper, segmented, empty, toast)
-                             Layouts (screen scaffold, cards, calendar grid, timeline, date strip, sheet scaffold)
-  Features/Home | Events | Money | Team | Profile
+  Model/
+    Models.swift             Codable records (Event, Client, Milestone, CrewMember, …, VendorProfile)
+    AuthService.swift        Sign in with Apple (nonce), Google, sign out, delete account, device-only account
+    Repository.swift         Repository protocol · LocalRepository (JSON on device) · Backend.isConfigured
+    FirestoreRepository.swift  snapshot listeners per collection, batched writes, offline cache
+    AppStore.swift           @Observable store: computed views, every mutation, derived conflicts/overdue/season
+    SampleSeason.swift       the demo season, date-shifted so it always starts next Saturday
+    Format.swift             ₹ grouping, dates, ids
+  DesignSystem/              Tokens · Typography · Components · Layouts
+  Features/Auth | Home | Events | Money | Team | Profile | Shared (edit sheets)
+  Mehfil.entitlements · PrivacyInfo.xcprivacy · Info.plist
   Fonts/                     Inter Light/Regular/Medium (SIL Open Font License)
 ```
 
 ## Design notes worth knowing
 
-- "Today" is pinned to **Thu 12 Nov 2026** (`Cal.today`) so the season, conflicts and receivables read exactly as designed. Switch it to `Date()` when real data arrives.
+- "Today" is live (`Cal.today`). The sample season is shifted by whole weeks so its busy Saturday is always the coming one — the conflict banner, overdue money and "Needs attention" read correctly on any date.
+- Nothing derived is stored: overdue is computed from due dates, crew conflicts from bookings, payment state from milestones. Firestore rules (`mehfil-backend/firestore.rules`) allow only the owner to touch `vendors/{uid}`.
 - Tokens come straight from the design's `tokens.css`: ground `#F6F9FC`, surface white, ink `#0D253D`, indigo `#533AFD`, ruby only for danger, and a dark set on ink/brand-navy with the accent lifted to subdued indigo for contrast.
 - Decline on the change request is tertiary, not destructive; destructive confirmations name the exact thing being cancelled.
 - The client page (E2) has no dark variant on purpose — it is the client's page, opened from a WhatsApp link.

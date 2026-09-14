@@ -49,7 +49,7 @@ struct RootView: View {
         case .eventDetail(let id): EventDetailView(eventId: id)
         case .createEvent: CreateEventView()
         case .runsheet(let id): RunsheetView(eventId: id)
-        case .changeRequest(let id): ChangeRequestView(eventId: id)
+        case .changeRequest(let id): ChangeRequestView(requestId: id)
         case .paymentSchedule(let id): PaymentScheduleView(eventId: id)
         case .expenses(let id): ExpensesView(eventId: id)
         case .assignCrew(let id): AssignCrewView(eventId: id)
@@ -58,8 +58,10 @@ struct RootView: View {
         case .itemDetail(let id): ItemDetailView(itemId: id)
         case .clients: ClientListView()
         case .sharedPage(let id): SharedEventPageView(eventId: id)
-        case .enquiry: EnquiryIntakeView()
+        case .enquiry(let id): EnquiryIntakeView(enquiryId: id)
         case .crewList: CrewListView(pushed: true)
+        case .packages: PackagesView()
+        case .account: AccountView()
         }
     }
 }

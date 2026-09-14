@@ -9,13 +9,15 @@ struct ReceivablesView: View {
         let open = store.openMilestones
         ScreenScaffold(title: "Receivables", subtitle: open.isEmpty ? "All paid up" : "\(store.eventsWithOpenMoney) events · \(open.count) open milestones", isRoot: true, spacing: Space.lg) {
             if open.isEmpty {
-                EmptyState(headline: "Nothing outstanding", line: "Every milestone across your \(store.upcomingEvents.count) events is paid up.", actionTitle: "View payment schedules") {
-                    if let e = store.upcomingEvents.first { store.push(.paymentSchedule(e.id)) }
+                EmptyState(headline: store.upcomingEvents.isEmpty ? "Nothing to collect yet" : "Nothing outstanding",
+                           line: store.upcomingEvents.isEmpty ? "Milestones appear here as soon as you book an event." : "Every milestone across your \(store.upcomingEvents.count) events is paid up.",
+                           actionTitle: store.upcomingEvents.isEmpty ? "Create event" : "View payment schedules", actionIcon: store.upcomingEvents.isEmpty ? "plus" : nil, primary: store.upcomingEvents.isEmpty) {
+                    if let e = store.upcomingEvents.first { store.push(.paymentSchedule(e.id)) } else { store.push(.createEvent, in: .events) }
                 }
-                .padding(.top, 180)
+                .padding(.top, 160)
             } else {
                 VStack(alignment: .leading, spacing: Space.xs) {
-                    Text("Total outstanding across \(store.eventsWithOpenMoney) events").type(.caption).foregroundStyle(MColor.textMute)
+                    Text("Total outstanding across \(store.eventsWithOpenMoney) event\(store.eventsWithOpenMoney == 1 ? "" : "s")").type(.caption).foregroundStyle(MColor.textMute)
                     Text(Fmt.inr(store.totalOutstanding)).type(.displayHero).foregroundStyle(MColor.text)
                     if store.overdueTotal > 0 {
                         HStack(spacing: Space.xs) {
@@ -26,7 +28,7 @@ struct ReceivablesView: View {
                 }
                 .padding(.bottom, Space.md)
 
-                group("Overdue", store.overdue, color: MColor.danger, action: true)
+                group("Overdue", store.overdue, action: true)
                 group("Due this week", store.dueThisWeek)
                 group("Upcoming", store.upcomingMilestones)
             }
@@ -35,27 +37,23 @@ struct ReceivablesView: View {
     }
 
     @ViewBuilder
-    private func group(_ title: String, _ list: [Milestone], color: Color = MColor.textMute, action: Bool = false) -> some View {
+    private func group(_ title: String, _ list: [Milestone], action: Bool = false) -> some View {
         if !list.isEmpty {
             VStack(spacing: Space.md) {
                 SectionHeading(title: title, trailing: "\(Fmt.inr(list.reduce(0) { $0 + $1.amount })) · \(list.count)")
-                    .foregroundStyle(color)
                 RowGroup {
                     ForEach(Array(list.enumerated()), id: \.element.id) { i, m in
                         if i > 0 { Hairline() }
                         let e = store.event(m.eventId)
-                        PaymentRow(milestone: m, title: e?.name ?? m.name, subtitle: subtitle(m), subtitleColor: m.status == .overdue ? MColor.danger : MColor.textMute,
-                                   trailingAction: action ? { reminder = m } : nil) {
-                            store.push(.paymentSchedule(m.eventId))
-                        }
+                        PaymentRow(milestone: m, title: e?.name ?? m.name, subtitle: subtitle(m), subtitleColor: m.effectiveStatus == .overdue ? MColor.danger : MColor.textMute,
+                                   trailingAction: action ? { reminder = m } : nil) { store.push(.paymentSchedule(m.eventId)) }
                     }
                 }
             }
         }
     }
     private func subtitle(_ m: Milestone) -> String {
-        let kind = m.kind == .instalment ? "Instalment" : m.kind.rawValue.capitalized
-        return m.status == .overdue ? "\(kind) · \(Fmt.daysLate(m.due)) days late" : "\(kind) · \(Fmt.weekdayDayMonth.string(from: m.due))"
+        m.effectiveStatus == .overdue ? "\(m.kind.label) · \(Fmt.daysLate(m.due)) days late" : "\(m.kind.label) · \(Fmt.weekdayDayMonth.string(from: m.due))"
     }
 }
 
@@ -67,6 +65,8 @@ struct PaymentScheduleView: View {
     @State private var addMilestone = false
     @State private var newName = ""
     @State private var newAmount = 0
+    @State private var newDue = Cal.startOfDay(Cal.today)
+    @State private var showDue = false
 
     var body: some View {
         if let e = store.event(eventId) {
@@ -82,31 +82,25 @@ struct PaymentScheduleView: View {
                         Text("of \(Fmt.inr(e.quoted)) · \(pct)%").type(.caption).foregroundStyle(MColor.textMute)
                     }
                     ProgressBar(fraction: Double(collected) / Double(max(1, e.quoted)))
-                    Text("\(Fmt.inr(e.quoted - collected)) to collect" + (overdue > 0 ? " · \(Fmt.inr(overdue)) overdue" : "")).type(.caption).foregroundStyle(MColor.textMute)
+                    Text("\(Fmt.inr(max(0, e.quoted - collected))) to collect" + (overdue > 0 ? " · \(Fmt.inr(overdue)) overdue" : "")).type(.caption).foregroundStyle(MColor.textMute)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).card()
 
                 RowGroup {
                     ForEach(Array(ms.enumerated()), id: \.element.id) { i, m in
                         if i > 0 { Hairline() }
-                        PaymentRow(milestone: m, subtitle: subtitle(m), subtitleColor: m.status == .overdue ? MColor.danger : MColor.textMute) {
-                            if m.isOpen { record = m }
-                        }
+                        PaymentRow(milestone: m, subtitle: paymentSubtitle(m), subtitleColor: m.effectiveStatus == .overdue ? MColor.danger : MColor.textMute) { if m.isOpen { record = m } }
                     }
-                    Hairline()
-                    Button { addMilestone = true } label: {
-                        HStack(spacing: Space.sm) {
-                            Image(systemName: "plus").font(.system(size: 14))
-                            Text("Add milestone").type(.buttonSm)
-                        }
-                        .foregroundStyle(MColor.accentText).padding(.horizontal, Space.lg).frame(height: Dim.row).frame(maxWidth: .infinity, alignment: .leading)
+                    if !ms.isEmpty { Hairline() }
+                    Button { newDue = e.day; addMilestone = true } label: {
+                        HStack(spacing: Space.sm) { Image(systemName: "plus").font(.system(size: 14)); Text("Add milestone").type(.buttonSm) }
+                            .foregroundStyle(MColor.accentText).padding(.horizontal, Space.lg).frame(height: Dim.row).frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                 }
             }
             .dockedActions {
-                MButton(title: "Record payment", icon: "indianrupeesign") { record = ms.first(where: \.isOpen) }
-                    .disabled(!ms.contains(where: \.isOpen))
+                MButton(title: "Record payment", icon: "indianrupeesign") { record = ms.first(where: \.isOpen) }.disabled(!ms.contains(where: \.isOpen))
             }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -120,24 +114,23 @@ struct PaymentScheduleView: View {
             .sheet(isPresented: $addMilestone) {
                 SheetScaffold(title: "Add milestone", subtitle: e.name) {
                     InputField(label: "Name", text: $newName, placeholder: "Third instalment")
+                    PickerField(label: "Due", value: Fmt.weekdayLongYear.string(from: newDue), trailing: "calendar") { showDue = true }
                     AmountInput(amount: newAmount, label: "Amount")
                     NumericKeypad(amount: $newAmount)
                 } actions: {
                     MButton(title: "Add milestone") {
-                        store.milestones.append(Milestone(id: UUID().uuidString, eventId: eventId, name: newName, amount: newAmount, due: e.start, status: .pending, paidOn: nil, method: nil, reference: nil, kind: .instalment))
+                        store.addMilestone(eventId: eventId, name: newName.trimmingCharacters(in: .whitespaces), amount: newAmount, due: newDue)
                         newName = ""; newAmount = 0; addMilestone = false
-                        store.show(.success, "Milestone added")
-                    }.disabled(newName.isEmpty || newAmount == 0)
+                    }.disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty || newAmount == 0)
                 }
                 .presentationDetents([.large])
+                .sheet(isPresented: $showDue) {
+                    SheetScaffold(title: "Due date") {
+                        DatePicker("Due", selection: $newDue, displayedComponents: .date).datePickerStyle(.graphical).tint(MColor.accent).environment(\.calendar, Cal.calendar)
+                    } actions: { MButton(title: "Done") { showDue = false } }
+                    .presentationDetents([.large])
+                }
             }
-        }
-    }
-    private func subtitle(_ m: Milestone) -> String {
-        switch m.status {
-        case .paid: return "Paid \(Fmt.weekdayDayMonth.string(from: m.paidOn ?? m.due))" + (m.method.map { " · \($0.rawValue)" } ?? "") + (m.reference.map { " · ref \($0)" } ?? "")
-        case .overdue: return "Due \(Fmt.weekdayDayMonth.string(from: m.due)) · \(Fmt.daysLate(m.due)) days late"
-        case .pending: return "Due \(Fmt.weekdayDayMonth.string(from: m.due)) · \(Fmt.relativeDays(m.due))"
         }
     }
 }
@@ -161,7 +154,7 @@ struct RecordPaymentSheet: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: Space.sm), GridItem(.flexible(), spacing: Space.sm)], spacing: Space.sm) {
                 ForEach(PaymentMethod.allCases) { m in
                     Button { withAnimation(.snappy(duration: 0.15)) { method = m } } label: {
-                        Text(m.rawValue).type(.buttonSm)
+                        Text(m.label).type(.buttonSm)
                             .foregroundStyle(method == m ? MColor.accentSoftText : MColor.accentText)
                             .frame(maxWidth: .infinity).frame(height: Dim.buttonCompact)
                             .background(method == m ? MColor.accentSoftBg : Color.clear, in: Capsule())
@@ -223,7 +216,7 @@ struct SendReminderSheet: View {
                     Avatar(index: client.avatar, name: client.name)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(client.name).type(.bodyMdStrong).foregroundStyle(MColor.text)
-                        Text("\(e.name) · \(Fmt.weekdayDayMonth.string(from: e.start)) · \(client.phone)").type(.caption).foregroundStyle(MColor.textMute)
+                        Text("\(e.name) · \(Fmt.weekdayDayMonth.string(from: e.start)) · \(client.phone.isEmpty ? "no phone" : client.phone)").type(.caption).foregroundStyle(MColor.textMute)
                     }
                     Spacer()
                 }
@@ -231,15 +224,13 @@ struct SendReminderSheet: View {
             }
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text("Tone").type(.caption).foregroundStyle(MColor.textMute)
-                SegmentedControl(items: ReminderTone.allCases, label: \.rawValue, selection: $tone)
+                SegmentedControl(items: ReminderTone.allCases, label: \.label, selection: $tone)
             }
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text("Message").type(.caption).foregroundStyle(MColor.textMute)
                 TextEditor(text: $message)
-                    .type(.bodyMd).foregroundStyle(MColor.text).scrollContentBackground(.hidden)
-                    .focused($editing)
-                    .frame(minHeight: 120)
-                    .padding(Space.sm)
+                    .type(.bodyMd).foregroundStyle(MColor.text).scrollContentBackground(.hidden).focused($editing)
+                    .frame(minHeight: 120).padding(Space.sm)
                     .background(MColor.surface, in: RoundedRectangle(cornerRadius: Radius.sm, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Radius.sm, style: .continuous).strokeBorder(editing ? MColor.accent : MColor.lineInput, lineWidth: 1))
                     .onChange(of: message) { _, _ in if editing { edited = true } }
@@ -248,14 +239,14 @@ struct SendReminderSheet: View {
                     Text("\(edited ? "Edited" : "Tap to edit") · \(message.count) characters").type(.caption).foregroundStyle(MColor.textMute)
                 }
             }
-            let history = store.sentReminders[milestone.id] ?? []
+            let history = store.reminders(for: milestone.id)
             if !history.isEmpty {
                 VStack(alignment: .leading, spacing: Space.sm) {
                     Text("Sent before").type(.caption).foregroundStyle(MColor.textMute)
                     RowGroup {
                         ForEach(Array(history.enumerated()), id: \.element.id) { i, r in
                             if i > 0 { Hairline() }
-                            ListRow(title: "\(r.tone.rawValue) · \(Fmt.weekdayDayMonthTime.string(from: r.sent))", subtitle: "\(r.channel.rawValue) · \(r.outcome)") {
+                            ListRow(title: "\(r.tone.label) · \(Fmt.weekdayDayMonthTime.string(from: r.sentAt))", subtitle: "\(r.channel.label) · \(r.outcome)") {
                                 IconTile(symbol: r.channel == .whatsapp ? "bubble" : "paperplane")
                             } trailing: { EmptyView() }
                         }
@@ -264,15 +255,15 @@ struct SendReminderSheet: View {
             }
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text("Send via").type(.caption).foregroundStyle(MColor.textMute)
-                SegmentedControl(items: ReminderChannel.allCases, label: \.rawValue, selection: $channel)
+                SegmentedControl(items: ReminderChannel.allCases, label: \.label, selection: $channel)
             }
         } actions: {
-            MButton(title: "Send on \(channel.rawValue)", icon: "paperplane") {
+            MButton(title: "Send on \(channel.label)", icon: "paperplane") {
                 store.sendReminder(milestoneId: milestone.id, tone: tone, channel: channel)
-                if channel == .whatsapp, let phone = client?.phone.replacingOccurrences(of: " ", with: ""),
-                   let u = URL(string: "https://wa.me/91\(phone)?text=\(message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")") {
-                    UIApplication.shared.open(u)
-                }
+                let phone = client?.phone.replacingOccurrences(of: " ", with: "") ?? ""
+                let text = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                let url = channel == .whatsapp ? "https://wa.me/91\(phone)?text=\(text)" : "sms:\(phone)&body=\(text)"
+                if !phone.isEmpty, let u = URL(string: url) { UIApplication.shared.open(u) }
                 dismiss()
             }
         }
@@ -285,23 +276,30 @@ struct SendReminderSheet: View {
 struct ExpensesView: View {
     @Environment(AppStore.self) private var store
     var eventId: String
+    @State private var addSheet = false
 
     var body: some View {
         if let e = store.event(eventId) {
-            let expenses = eventId == "gill-engagement" ? Seed.gillExpenses : defaultExpenses(for: e)
+            let expenses = store.expenses(for: eventId)
             let total = expenses.reduce(0) { $0 + $1.amount }
             let margin = e.quoted - total
             let loss = margin < 0
             let pct = e.quoted == 0 ? 0 : Double(margin) / Double(e.quoted) * 100
-            ScreenScaffold(title: "Expenses", subtitle: "\(e.name) · \(Fmt.weekdayLong.string(from: e.start))", spacing: Space.lg) {
-                RowGroup {
-                    ForEach(Array(expenses.enumerated()), id: \.element.id) { i, x in
-                        if i > 0 { Hairline() }
-                        ListRow(title: x.name, subtitle: x.detail) { EmptyView() } trailing: { Money(x.amount) }
+            ScreenScaffold(title: "Expenses", subtitle: "\(e.name) · \(Fmt.weekdayLong.string(from: e.start))", spacing: Space.lg, bottomPadding: 100) {
+                if expenses.isEmpty {
+                    EmptyState(headline: "No expenses logged", line: "Add flowers, crew wages, hire and transport as they come in to see the real margin.", actionTitle: "Add expense", actionIcon: "plus", primary: true) { addSheet = true }
+                        .padding(.vertical, Space.xl)
+                } else {
+                    RowGroup {
+                        ForEach(Array(expenses.enumerated()), id: \.element.id) { i, x in
+                            if i > 0 { Hairline() }
+                            ListRow(title: x.name, subtitle: x.detail.isEmpty ? nil : x.detail) { EmptyView() } trailing: { Money(x.amount) }
+                                .contextMenu { Button("Delete", systemImage: "trash", role: .destructive) { store.deleteExpense(x.id) } }
+                        }
+                        Hairline()
+                        ListRow(title: "Total cost", subtitle: "\(expenses.count) entr\(expenses.count == 1 ? "y" : "ies")") { EmptyView() } trailing: { Money(total) }
+                            .background(MColor.surfacePressed)
                     }
-                    Hairline()
-                    ListRow(title: "Total cost", subtitle: "\(expenses.count) entries") { EmptyView() } trailing: { Money(total) }
-                        .background(MColor.surfacePressed)
                 }
 
                 VStack(alignment: .leading, spacing: Space.md) {
@@ -313,31 +311,18 @@ struct ExpensesView: View {
                     }
                     HStack(spacing: Space.md) {
                         if loss { StatusChip(kind: .loss) }
-                        Text(loss ? String(format: "−%.1f%% · agency cover cost the margin", abs(pct)) : String(format: "%.1f%% margin on the quote", pct)).type(.caption).foregroundStyle(MColor.textMute)
+                        Text(loss ? String(format: "−%.1f%% · costs exceed the quote", abs(pct)) : String(format: "%.1f%% margin on the quote", pct)).type(.caption).foregroundStyle(MColor.textMute)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card(fill: loss ? MColor.dangerTint : MColor.surface)
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { store.show(.info, "Expense entry is coming with the next release") } label: { Image(systemName: "plus") }
-                }
-            }
+            .dockedActions { MButton(title: "Add expense", icon: "plus", style: .secondary) { addSheet = true } }
+            .sheet(isPresented: $addSheet) { ExpenseSheet(eventId: eventId) }
         }
     }
     private func row(_ label: String, _ amount: Int) -> some View {
         HStack { Text(label).type(.bodyMd).foregroundStyle(MColor.textMute); Spacer(); Money(amount) }
-    }
-    private func defaultExpenses(for e: Event) -> [Expense] {
-        let q = e.quoted
-        return [
-            Expense(id: "d1", name: "Flowers", detail: "Marigold, roses, foliage · Ghazipur mandi", amount: q * 14 / 100),
-            Expense(id: "d2", name: "Crew wages", detail: "\(e.crewAssigned) crew · day rates", amount: e.crewAssigned * 1100),
-            Expense(id: "d3", name: "Lighting and truss hire", detail: "Truss · par cans", amount: q * 9 / 100),
-            Expense(id: "d4", name: "Fabric and drapes", detail: "Cleaning and replacements", amount: q * 6 / 100),
-            Expense(id: "d5", name: "Transport", detail: "Trucks to \(e.venue.area)", amount: q * 3 / 100),
-        ]
     }
 }

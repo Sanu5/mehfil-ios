@@ -11,9 +11,9 @@ struct CreateEventView: View {
 
     private var draft: Binding<EventDraft> { Binding(get: { store.draft }, set: { store.draft = $0 }) }
     private var conflicts: [Event] { store.draft.date.map { store.events(on: $0) } ?? [] }
-    private var packageTotal: Int { Seed.packages.filter { store.draft.packageIds.contains($0.id) }.reduce(0) { $0 + $1.price } }
-    private var step1Valid: Bool { !store.draft.clientName.isEmpty && store.draft.type != nil && store.draft.date != nil }
-    private var step2Valid: Bool { !store.draft.venue.isEmpty && store.draft.quoted > 0 }
+    private var packageTotal: Int { store.packages.filter { store.draft.packageIds.contains($0.id) }.reduce(0) { $0 + $1.price } }
+    private var step1Valid: Bool { !store.draft.clientName.trimmingCharacters(in: .whitespaces).isEmpty && store.draft.type != nil && store.draft.date != nil }
+    private var step2Valid: Bool { !store.draft.venue.trimmingCharacters(in: .whitespaces).isEmpty && store.draft.quoted > 0 }
 
     var body: some View {
         ScreenScaffold(title: "New event", largeTitle: false, spacing: Space.lg, bottomPadding: step == 2 ? 120 : Space.xxl) {
@@ -32,10 +32,7 @@ struct CreateEventView: View {
                     MButton(title: "Continue") { withAnimation(.snappy(duration: 0.3)) { step = 2 } }.disabled(!step1Valid)
                 } else {
                     MButton(title: "Create event") {
-                        if let e = store.createEvent(from: store.draft) {
-                            store.pop()
-                            store.push(.eventDetail(e.id))
-                        }
+                        if let e = store.createEvent(from: store.draft) { store.pop(); store.push(.eventDetail(e.id)) }
                     }.disabled(!step2Valid)
                 }
             }
@@ -63,10 +60,12 @@ struct CreateEventView: View {
             PickerField(label: "Date", value: store.draft.date.map { Fmt.weekdayLongYear.string(from: $0) } ?? "", placeholder: "Pick a date", trailing: "calendar", highlighted: store.draft.date != nil) { showDate = true }
             // Conflict check fires on date selection, not on submission (spec B3).
             if let d = store.draft.date, !conflicts.isEmpty {
-                let chairs = store.item("chairs").map { "\($0.committed(on: d)) of \($0.total) chairs" } ?? "inventory"
+                let chairs = store.inventory.first(where: { $0.name.localizedCaseInsensitiveContains("chair") }).map { "\($0.committed(on: d)) of \($0.total) \($0.unit)" }
                 let when = conflicts.allSatisfy { Cal.hour($0.start) >= 17 } ? "that evening" : "that day"
                 let words = ["", "One", "Two", "Three", "Four", "Five"]
-                InlineConflictWarning(sentence: conflicts.count == 1 ? "\(conflicts[0].name) already runs \(when). \(chairs) are committed." : "\(conflicts.count < words.count ? words[conflicts.count] : "\(conflicts.count)") events already run \(when). Suresh's team and \(chairs) are committed.",
+                let lead = store.crew.first { m in m.isLead && m.bookings.contains { id in conflicts.contains { $0.id == id } } }
+                let committed = [lead.map { "\($0.firstName)'s team" }, chairs].compactMap { $0 }.joined(separator: " and ")
+                InlineConflictWarning(sentence: (conflicts.count == 1 ? "\(conflicts[0].name) already runs \(when)." : "\(conflicts.count < words.count ? words[conflicts.count] : "\(conflicts.count)") events already run \(when).") + (committed.isEmpty ? "" : " \(committed) are committed."),
                                       events: conflicts, linkTitle: "See \(Fmt.dayMonth.string(from: d)) timeline") { store.push(.dayDetail(d)) }
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -86,25 +85,26 @@ struct CreateEventView: View {
             }
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text("Packages · select all that apply").type(.caption).foregroundStyle(MColor.textMute)
-                RowGroup {
-                    ForEach(Array(Seed.packages.enumerated()), id: \.element.id) { i, p in
-                        if i > 0 { Hairline() }
-                        let on = store.draft.packageIds.contains(p.id)
-                        Button {
-                            withAnimation(.snappy(duration: 0.2)) { if on { store.draft.packageIds.remove(p.id) } else { store.draft.packageIds.insert(p.id) } }
-                        } label: {
-                            ListRow(title: p.name, subtitle: "\(Fmt.inr(p.price)) · \(p.detail)", selected: on) { EmptyView() } trailing: {
-                                Image(systemName: on ? "checkmark" : "circle").font(.system(size: 16)).foregroundStyle(on ? MColor.accentText : MColor.line)
+                if store.packages.isEmpty {
+                    Text("No package templates yet — add them in Profile.").type(.caption).foregroundStyle(MColor.textMute)
+                } else {
+                    RowGroup {
+                        ForEach(Array(store.packages.enumerated()), id: \.element.id) { i, p in
+                            if i > 0 { Hairline() }
+                            let on = store.draft.packageIds.contains(p.id)
+                            Button {
+                                withAnimation(.snappy(duration: 0.2)) { if on { store.draft.packageIds.remove(p.id) } else { store.draft.packageIds.insert(p.id) } }
+                            } label: {
+                                ListRow(title: p.name, subtitle: "\(Fmt.inr(p.price)) · \(p.detail)", selected: on) { EmptyView() } trailing: {
+                                    Image(systemName: on ? "checkmark" : "circle").font(.system(size: 16)).foregroundStyle(on ? MColor.accentText : MColor.line)
+                                }
                             }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
-            Button { showAmount = true } label: {
-                AmountInput(amount: store.draft.quoted, focused: false, label: "Quoted amount")
-            }
-            .buttonStyle(.plain)
+            Button { showAmount = true } label: { AmountInput(amount: store.draft.quoted, focused: false, label: "Quoted amount") }.buttonStyle(.plain)
         }
     }
 
@@ -129,11 +129,10 @@ struct CreateEventView: View {
 
     private var dateSheet: some View {
         SheetScaffold(title: "Event date", subtitle: "Conflicts are checked as soon as you pick.") {
-            DatePicker("Date", selection: Binding(get: { store.draft.date ?? Cal.date(2026, 11, 14) }, set: { store.draft.date = Cal.startOfDay($0) }), displayedComponents: .date)
-                .datePickerStyle(.graphical).tint(MColor.accent)
-                .environment(\.calendar, Cal.calendar)
+            DatePicker("Date", selection: Binding(get: { store.draft.date ?? Cal.nextSaturday }, set: { store.draft.date = Cal.startOfDay($0) }), in: Cal.startOfDay(Cal.today)..., displayedComponents: .date)
+                .datePickerStyle(.graphical).tint(MColor.accent).environment(\.calendar, Cal.calendar)
         } actions: {
-            MButton(title: "Done") { if store.draft.date == nil { store.draft.date = Cal.date(2026, 11, 14) }; showDate = false }
+            MButton(title: "Done") { if store.draft.date == nil { store.draft.date = Cal.nextSaturday }; showDate = false }
         }
         .presentationDetents([.large])
     }
@@ -144,9 +143,7 @@ struct CreateEventView: View {
                 ForEach(Array(EventType.allCases.enumerated()), id: \.element.id) { i, t in
                     if i > 0 { Hairline() }
                     Button { store.draft.type = t; showType = false } label: {
-                        ListRow(title: t.label, selected: store.draft.type == t) { EmptyView() } trailing: {
-                            if store.draft.type == t { Image(systemName: "checkmark").foregroundStyle(MColor.accentText) }
-                        }
+                        ListRow(title: t.label, selected: store.draft.type == t) { EmptyView() } trailing: { if store.draft.type == t { Image(systemName: "checkmark").foregroundStyle(MColor.accentText) } }
                     }.buttonStyle(.plain)
                 }
             }
@@ -158,9 +155,7 @@ struct CreateEventView: View {
         SheetScaffold(title: "Quoted amount", subtitle: "What the client pays in total") {
             AmountInput(amount: store.draft.quoted, label: nil)
             NumericKeypad(amount: draft.quoted)
-        } actions: {
-            MButton(title: "Done") { showAmount = false }
-        }
+        } actions: { MButton(title: "Done") { showAmount = false } }
         .presentationDetents([.large])
     }
 }

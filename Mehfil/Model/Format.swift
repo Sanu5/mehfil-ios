@@ -1,6 +1,6 @@
 import Foundation
 
-// MARK: - Calendar helpers. The content model is anchored to Thu 12 Nov 2026 (NOTES "Content model").
+// MARK: - Calendar helpers.
 
 enum Cal {
     static let calendar: Calendar = {
@@ -9,8 +9,24 @@ enum Cal {
         return c
     }()
 
-    /// The vendor's "today". Fixed so the season, conflicts and receivables read exactly as designed.
-    static let today: Date = date(2026, 11, 12, 9, 41)
+    /// The vendor's "today". Real time in production; the sample season is date-shifted to fit around it.
+    static var today: Date { Date() }
+    /// Next Saturday strictly after today (the wedding-season focal day).
+    static var nextSaturday: Date {
+        let wd = calendar.component(.weekday, from: today)
+        let delta = (7 - wd + 7) % 7
+        return startOfDay(adding(delta == 0 ? 7 : delta, .day, to: today))
+    }
+    /// Season window (Oct–Feb) containing `day`.
+    static func seasonStart(containing day: Date) -> Date {
+        let y = year(day), m = month(day)
+        return date(m >= 10 ? y : y - 1, 10, 1)
+    }
+    static func seasonLabel(containing day: Date) -> String {
+        let y = year(seasonStart(containing: day))
+        return "Season \(y)–\(String(y + 1).suffix(2))"
+    }
+    static func newId() -> String { UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "").prefix(20).description }
 
     static func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 0, _ min: Int = 0) -> Date {
         calendar.date(from: DateComponents(year: y, month: m, day: d, hour: h, minute: min))!
