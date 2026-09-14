@@ -318,7 +318,7 @@ struct SharedEventPageView: View {
                         .layoutPriority(1)
                         Spacer(minLength: Space.sm)
                         Button {
-                            if let u = URL(string: "https://wa.me/91\(v.phone.replacingOccurrences(of: " ", with: ""))") { UIApplication.shared.open(u) }
+                            if let u = URL(string: "https://wa.me/\(Fmt.phoneDigits(v.phone))") { UIApplication.shared.open(u) }
                         } label: {
                             HStack(spacing: Space.xs) { Image(systemName: "bubble").font(.system(size: 14)); Text("Chat").type(.buttonSm) }
                                 .foregroundStyle(Palette.ink).padding(.horizontal, Space.md).frame(height: 40).overlay(Capsule().strokeBorder(Palette.ink, lineWidth: 1))

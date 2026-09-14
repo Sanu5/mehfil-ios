@@ -260,9 +260,9 @@ struct SendReminderSheet: View {
         } actions: {
             MButton(title: "Send on \(channel.label)", icon: "paperplane") {
                 store.sendReminder(milestoneId: milestone.id, tone: tone, channel: channel)
-                let phone = client?.phone.replacingOccurrences(of: " ", with: "") ?? ""
+                let phone = Fmt.phoneDigits(client?.phone ?? "")
                 let text = message.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                let url = channel == .whatsapp ? "https://wa.me/91\(phone)?text=\(text)" : "sms:\(phone)&body=\(text)"
+                let url = channel == .whatsapp ? "https://wa.me/\(phone)?text=\(text)" : "sms:+\(phone)&body=\(text)"
                 if !phone.isEmpty, let u = URL(string: url) { UIApplication.shared.open(u) }
                 dismiss()
             }

@@ -206,7 +206,7 @@ struct ChangeRequestView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        if let client, !client.phone.isEmpty { Button("Call \(client.name)", systemImage: "phone") { if let u = URL(string: "tel://\(client.phone.replacingOccurrences(of: " ", with: ""))") { UIApplication.shared.open(u) } } }
+                        if let client, !client.phone.isEmpty { Button("Call \(client.name)", systemImage: "phone") { if let u = URL(string: "tel://\(Fmt.phoneDigits(client.phone))") { UIApplication.shared.open(u) } } }
                         Button("Open event", systemImage: "calendar") { store.push(.eventDetail(e.id)) }
                     } label: { Image(systemName: "ellipsis") }
                 }

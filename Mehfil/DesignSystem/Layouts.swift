@@ -495,8 +495,8 @@ struct ContactRow: View {
                 Text(note).type(.caption).foregroundStyle(MColor.textMute)
             }
             Spacer()
-            circleAction("phone") { open("tel://\(client.phone.replacingOccurrences(of: " ", with: ""))") }
-            circleAction("bubble") { open("https://wa.me/91\(client.phone.replacingOccurrences(of: " ", with: ""))") }
+            circleAction("phone") { open("tel://\(Fmt.phoneDigits(client.phone))") }
+            circleAction("bubble") { open("https://wa.me/\(Fmt.phoneDigits(client.phone))") }
         }
         .card(padding: Space.md)
     }

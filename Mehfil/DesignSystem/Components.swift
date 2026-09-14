@@ -249,6 +249,8 @@ struct InputField: View {
     var error: String? = nil
     var keyboard: UIKeyboardType = .default
     var trailing: String? = nil
+    /// Marks the field as an SMS one-time code so iOS offers the code from Messages above the keyboard.
+    var oneTimeCode = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -258,6 +260,7 @@ struct InputField: View {
                 TextField(placeholder, text: $text)
                     .type(.bodyMd).foregroundStyle(MColor.text)
                     .keyboardType(keyboard)
+                    .textContentType(oneTimeCode ? .oneTimeCode : nil)
                     .focused($focused)
                     .tint(MColor.accent)
                 if let trailing { Image(systemName: trailing).font(.system(size: 16)).foregroundStyle(MColor.textMute) }

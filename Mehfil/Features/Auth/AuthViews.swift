@@ -7,6 +7,7 @@ struct WelcomeView: View {
     @Environment(\.colorScheme) private var scheme
     @State private var busy = false
     @State private var error: String?
+    @State private var phoneSheet = false
 
     var body: some View {
         ZStack {
@@ -41,6 +42,15 @@ struct WelcomeView: View {
                             .background(MColor.surface, in: Capsule()).overlay(Capsule().strokeBorder(MColor.lineInput, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
+                        Button { phoneSheet = true } label: {
+                            HStack(spacing: Space.sm) {
+                                Image(systemName: "phone").font(.system(size: 16, weight: .medium))
+                                Text("Continue with mobile number").type(.buttonMd)
+                            }
+                            .foregroundStyle(MColor.text).frame(maxWidth: .infinity).frame(height: Dim.button)
+                            .background(MColor.surface, in: Capsule()).overlay(Capsule().strokeBorder(MColor.lineInput, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
                     } else {
                         MButton(title: "Continue on this device", icon: "iphone") { auth.continueOnDevice() }
                         Text("This build has no cloud configuration, so your data stays on this device. See backend/README.md to enable Apple and Google sign-in.")
@@ -54,6 +64,7 @@ struct WelcomeView: View {
             .padding(.horizontal, Space.xl).padding(.bottom, Space.lg)
             if busy { MColor.scrim.ignoresSafeArea(); ProgressView().tint(.white) }
         }
+        .sheet(isPresented: $phoneSheet) { PhoneVerifySheet(intent: .signIn) { _ in } }
     }
 
     private func point(_ symbol: String, _ text: String) -> some View {
@@ -85,15 +96,22 @@ struct OnboardingView: View {
     @State private var business = ""
     @State private var phone = ""
     @State private var area = ""
+    @State private var phoneVerified = false
+    @State private var verifySheet = false
     @State private var loadSample = true
     @State private var saving = false
 
     var body: some View {
         NavigationStack {
-            ScreenScaffold(title: "Set up your business", subtitle: "Signed in with \(account.providerLabel)" + (account.email.map { " · \($0)" } ?? ""), spacing: Space.lg, bottomPadding: 120) {
+            ScreenScaffold(title: "Set up your business", subtitle: "Signed in with \(account.providerLabel)" + (account.email.map { " · \($0)" } ?? account.phone.map { " · \(Fmt.phone($0))" } ?? ""), spacing: Space.lg, bottomPadding: 120) {
                 InputField(label: "Your name", text: $owner, placeholder: "Anand Mehra")
                 InputField(label: "Business name", text: $business, placeholder: "Mehfil Decor")
-                InputField(label: "Phone", text: $phone, placeholder: "98110 08123", keyboard: .phonePad)
+                if auth.isCloud {
+                    // Numbers are only stored once an OTP has confirmed them (and linked them to the account).
+                    PhoneRow(phone: phone, verified: phoneVerified) { verifySheet = true }
+                } else {
+                    InputField(label: "Phone", text: $phone, placeholder: "98110 08123", keyboard: .phonePad)
+                }
                 InputField(label: "Area", text: $area, placeholder: "Sector 44, Gurugram")
                 Toggle(isOn: $loadSample) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -107,14 +125,20 @@ struct OnboardingView: View {
                 MButton(title: "Open Mehfil", loading: saving) {
                     saving = true
                     Task {
-                        await store.completeOnboarding(profile: .new(owner: owner.trimmingCharacters(in: .whitespaces), business: business.trimmingCharacters(in: .whitespaces), phone: phone, area: area), loadSample: loadSample)
+                        await store.completeOnboarding(profile: .new(owner: owner.trimmingCharacters(in: .whitespaces), business: business.trimmingCharacters(in: .whitespaces), phone: phone, phoneVerified: phoneVerified, area: area), loadSample: loadSample)
                         saving = false
                     }
                 }
-                .disabled(owner.trimmingCharacters(in: .whitespaces).isEmpty || business.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(owner.trimmingCharacters(in: .whitespaces).isEmpty || business.trimmingCharacters(in: .whitespaces).isEmpty || (!phone.isEmpty && !phoneVerified))
             }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Sign out") { try? auth.signOut() }.type(.buttonSm) } }
-            .onAppear { if owner.isEmpty, let n = account.name { owner = n } }
+            .onAppear {
+                if owner.isEmpty, let n = account.name { owner = n }
+                if phone.isEmpty, let p = account.phone { phone = p; phoneVerified = true }   // signed in with the number, or linked earlier
+            }
+            .sheet(isPresented: $verifySheet) {
+                PhoneVerifySheet(intent: account.phone == nil ? .link : .update, initialPhone: phone) { phone = $0; phoneVerified = true }
+            }
         }
     }
 }
@@ -127,14 +151,24 @@ struct AccountView: View {
     @State private var confirmDelete = false
     @State private var busy = false
     @State private var error: String?
+    @State private var phoneSheet = false
+    @State private var reauthSheet = false
 
     var body: some View {
         let account = auth.account
-        ScreenScaffold(title: "Account", subtitle: account.map { "\($0.providerLabel)" + ($0.email.map { " · \($0)" } ?? "") }, spacing: Space.lg) {
+        ScreenScaffold(title: "Account", subtitle: account.map { "\($0.providerLabel)" + ($0.email.map { " · \($0)" } ?? $0.phone.map { " · \(Fmt.phone($0))" } ?? "") }, spacing: Space.lg) {
             RowGroup {
-                ListRow(title: account?.name ?? store.vendor?.ownerName ?? "You", subtitle: account?.email ?? (auth.isCloud ? "Signed in" : "On this device only")) {
+                ListRow(title: account?.name ?? store.vendor?.ownerName ?? "You", subtitle: account?.email ?? account?.phone.map(Fmt.phone) ?? (auth.isCloud ? "Signed in" : "On this device only")) {
                     IconTile(symbol: "person")
                 } trailing: { EmptyView() }
+                if auth.isCloud {
+                    Hairline(inset: 68)
+                    Button { phoneSheet = true } label: {
+                        ListRow(title: "Mobile number", subtitle: account?.phone.map { Fmt.phone($0) + " · verified" } ?? "Add and verify with an OTP") {
+                            IconTile(symbol: account?.phone == nil ? "phone" : "checkmark.seal")
+                        } trailing: { Text(account?.phone == nil ? "Add" : "Change").type(.buttonSm).foregroundStyle(MColor.accentText) }
+                    }.buttonStyle(.plain)
+                }
                 Hairline(inset: 68)
                 ListRow(title: "Storage", subtitle: auth.isCloud ? "Synced to your Mehfil cloud account" : "This device — not backed up") {
                     IconTile(symbol: auth.isCloud ? "icloud" : "iphone")
@@ -151,7 +185,7 @@ struct AccountView: View {
             }
             VStack(spacing: Space.sm) {
                 MButton(title: "Sign out", style: .secondary) { try? auth.signOut() }
-                MButton(title: "Delete account", style: .destructive) { confirmDelete = true }
+                MButton(title: "Delete account", style: .destructive) { if account?.provider == "phone" { reauthSheet = true } else { confirmDelete = true } }
                 if let error { Text(error).type(.caption).foregroundStyle(MColor.danger).multilineTextAlignment(.center) }
             }
             .padding(.top, Space.md)
@@ -164,6 +198,12 @@ struct AccountView: View {
             .type(.caption).tint(MColor.accentText)
         }
         .overlay { if busy { ZStack { MColor.scrim.ignoresSafeArea(); ProgressView().tint(.white) } } }
+        .sheet(isPresented: $phoneSheet) {
+            PhoneVerifySheet(intent: account?.phone == nil ? .link : .update, initialPhone: account?.phone ?? "") { verified in
+                store.updateProfile { $0.phone = verified; $0.phoneVerified = true }
+            }
+        }
+        .sheet(isPresented: $reauthSheet) { PhoneVerifySheet(intent: .reauth, initialPhone: account?.phone ?? "") { _ in confirmDelete = true } }
         .sheet(isPresented: $confirmErase) {
             SheetScaffold(title: "Erase everything in \(store.vendor?.businessName ?? "Mehfil")?", subtitle: "Every event, client, crew member, item and payment record goes. Your account and profile stay.") { EmptyView() } actions: {
                 VStack(spacing: Space.sm) {

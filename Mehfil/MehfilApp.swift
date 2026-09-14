@@ -1,8 +1,30 @@
 import SwiftUI
 import FirebaseCore
+import FirebaseAuth
+import GoogleSignIn
+
+/// Forwards the APNs token and silent pushes to Firebase Auth, which uses them to verify the app during phone sign-in.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        if Backend.isConfigured { application.registerForRemoteNotifications() }
+        return true
+    }
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        if Backend.isConfigured { Auth.auth().setAPNSToken(deviceToken, type: .unknown) }
+    }
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) { }   // simulator: reCAPTCHA fallback
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any], fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        if Backend.isConfigured, Auth.auth().canHandleNotification(userInfo) { completionHandler(.noData); return }
+        completionHandler(.noData)
+    }
+    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+        Backend.isConfigured && (Auth.auth().canHandle(url) || GIDSignIn.sharedInstance.handle(url))
+    }
+}
 
 @main
 struct MehfilApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var auth: AuthService
     @State private var store: AppStore
 

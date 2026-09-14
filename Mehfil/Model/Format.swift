@@ -57,6 +57,25 @@ enum Cal {
 // MARK: - Formatting
 
 enum Fmt {
+    /// "+919811008123" → "+91 98110 08123"; anything else is returned as typed.
+    static func phone(_ e164: String) -> String {
+        let digits = e164.filter(\.isNumber)
+        if e164.hasPrefix("+91"), digits.count == 12 { let n = digits.dropFirst(2); return "+91 \(n.prefix(5)) \(n.suffix(5))" }
+        if digits.count == 10, !e164.hasPrefix("+") { return "\(digits.prefix(5)) \(digits.suffix(5))" }
+        return e164
+    }
+    /// Digits for wa.me / tel: links — a bare 10-digit Indian number gets the 91 prefix.
+    static func phoneDigits(_ phone: String) -> String {
+        let digits = phone.filter(\.isNumber)
+        return digits.count == 10 ? "91" + digits : digits
+    }
+    /// Builds an E.164 number from a dialling code and a local number; nil when it can't be one.
+    static func e164(code: String, number: String) -> String? {
+        let c = code.filter(\.isNumber), n = number.filter(\.isNumber)
+        guard c.count >= 1, c.count <= 3, n.count >= 6, n.count <= 12 else { return nil }
+        return "+" + c + n
+    }
+
     /// Indian digit grouping: ₹23,47,500 — never ₹2,347,500 (spec §6).
     static func inr(_ amount: Int, symbol: Bool = true) -> String {
         let negative = amount < 0

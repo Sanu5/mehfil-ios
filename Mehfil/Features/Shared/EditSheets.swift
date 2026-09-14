@@ -162,10 +162,13 @@ struct PackageSheet: View {
 
 struct BusinessProfileSheet: View {
     @Environment(AppStore.self) private var store
+    @Environment(AuthService.self) private var auth
     @Environment(\.dismiss) private var dismiss
     @State private var owner = ""
     @State private var business = ""
     @State private var phone = ""
+    @State private var phoneVerified = false
+    @State private var verifySheet = false
     @State private var area = ""
     @State private var since = ""
     @State private var target = ""
@@ -174,7 +177,8 @@ struct BusinessProfileSheet: View {
         SheetScaffold(title: "Business details") {
             InputField(label: "Business name", text: $business)
             InputField(label: "Your name", text: $owner)
-            InputField(label: "Phone", text: $phone, keyboard: .phonePad)
+            if auth.isCloud { PhoneRow(phone: phone, verified: phoneVerified) { verifySheet = true } }
+            else { InputField(label: "Phone", text: $phone, keyboard: .phonePad) }
             InputField(label: "Area", text: $area, placeholder: "Sector 44, Gurugram")
             InputField(label: "Operating since", text: $since, placeholder: "since 2018")
             InputField(label: "Season target (₹)", text: $target, placeholder: "6000000", helper: "The bar on the season summary measures bookings against this.", keyboard: .numberPad)
@@ -182,13 +186,16 @@ struct BusinessProfileSheet: View {
             MButton(title: "Save") {
                 store.updateProfile { p in
                     p.businessName = business.trimmingCharacters(in: .whitespaces); p.ownerName = owner.trimmingCharacters(in: .whitespaces)
-                    p.phone = phone; p.area = area; p.since = since; p.seasonTarget = Int(target.filter(\.isNumber)) ?? p.seasonTarget
+                    p.phone = phone; p.phoneVerified = phoneVerified; p.area = area; p.since = since; p.seasonTarget = Int(target.filter(\.isNumber)) ?? p.seasonTarget
                 }
                 dismiss()
             }
             .disabled(business.trimmingCharacters(in: .whitespaces).isEmpty || owner.trimmingCharacters(in: .whitespaces).isEmpty)
         }
-        .onAppear { if let v = store.vendor { owner = v.ownerName; business = v.businessName; phone = v.phone; area = v.area; since = v.since; target = String(v.seasonTarget) } }
+        .onAppear { if let v = store.vendor { owner = v.ownerName; business = v.businessName; phone = v.phone; phoneVerified = v.isPhoneVerified; area = v.area; since = v.since; target = String(v.seasonTarget) } }
+        .sheet(isPresented: $verifySheet) {
+            PhoneVerifySheet(intent: auth.account?.phone == nil ? .link : .update, initialPhone: phone) { phone = $0; phoneVerified = true }
+        }
         .presentationDetents([.large])
     }
 }
